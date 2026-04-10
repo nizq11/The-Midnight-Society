@@ -40,6 +40,18 @@
   .pay-link { display: block; margin-top: 16px; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 13px; font-weight: 800; letter-spacing: 0.15em; text-transform: uppercase; color: #c9a84c; text-decoration: none; border: 1px solid #3a2f1a; padding: 14px; transition: border-color 0.2s; }
   .pay-link:hover { border-color: #c9a84c; }
   .pay-note { font-size: 14px; font-weight: 600; color: #6a5832; margin-top: 12px; }
+  .upload-wrap { border: 1px solid #2a2318; padding: 32px 24px; text-align: center; margin-bottom: 32px; position: relative; }
+  .upload-wrap::before { content: 'PAYMENT PROOF'; position: absolute; top: -9px; left: 50%; transform: translateX(-50%); background: #0a0804; padding: 0 12px; font-family: 'Space Mono', monospace; font-weight: 700; font-size: 11px; letter-spacing: 0.28em; color: #a08a60; }
+  .upload-area { border: 2px dashed #3a2f1a; padding: 28px 20px; cursor: pointer; transition: border-color 0.3s, background 0.3s; }
+  .upload-area:hover { border-color: #c9a84c; background: rgba(201, 168, 76, 0.04); }
+  .upload-icon { font-size: 28px; color: #c9a84c; margin-bottom: 8px; line-height: 1; }
+  .upload-text { font-size: 14px; font-weight: 600; color: #6a5832; }
+  .upload-preview { display: none; margin-top: 16px; }
+  .upload-preview img { max-width: 100%; max-height: 200px; border: 2px solid #2a2318; }
+  .upload-filename { font-family: 'Space Mono', monospace; font-size: 12px; color: #b09870; letter-spacing: 0.05em; margin-top: 8px; }
+  .upload-remove { font-size: 12px; color: #8a6f3a; cursor: pointer; text-decoration: underline; margin-top: 6px; background: none; border: none; font-family: 'Space Mono', monospace; }
+  .upload-remove:hover { color: #c9a84c; }
+  .upload-error { font-size: 13px; color: #a04030; margin-top: 8px; display: none; }
   .submit-btn { width: 100%; background: transparent; border: 1.5px solid #8a6f3a; color: #c9a84c; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 14px; font-weight: 800; letter-spacing: 0.22em; text-transform: uppercase; padding: 19px; cursor: pointer; transition: all 0.3s; }
   .submit-btn:hover { background: #12100a; border-color: #c9a84c; }
   .warning-text { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 13px; font-weight: 600; letter-spacing: 0.04em; color: #5a4820; text-align: center; margin-top: 24px; line-height: 2.1; }
@@ -61,7 +73,7 @@
     <div class="subtitle">Est. MMXXV · Private Assembly</div>
     <div class="tagline">You were not invited. You were selected.</div>
   </div>
-
+ 
   <div class="form-section">
     <div class="section-label">Registration of intent</div>
     <div class="form-area" id="formArea">
@@ -88,7 +100,7 @@
         <label>Mobile (for confirmation)</label>
         <input type="text" id="phoneInput" placeholder="+91 XXXXX XXXXX" />
       </div>
-
+ 
       <div class="field" style="margin-bottom:8px;">
         <label>Group size</label>
       </div>
@@ -100,13 +112,13 @@
           <button class="step-btn" onclick="changeGroup(1)">+</button>
         </div>
       </div>
-
+ 
       <div class="price-display">
         Total due
         <span class="amount" id="totalAmount">₹699</span>
         <span class="per-head" id="perHead">₹699 × 1 person</span>
       </div>
-
+ 
       <div class="qr-wrap">
         <div id="qrContainer" style="display:none"></div>
         <div style="display:flex;justify-content:center;margin-bottom:16px;">
@@ -116,14 +128,28 @@
         <a class="pay-link" id="payLink" href="upi://pay?pa=9820007421@hdfc&pn=NishqVikramNerlekar&cu=INR&tn=Midnight%20Society%20Entry">Open in payment app →</a>
         <div class="pay-note">Add your name in remarks. Exact amount only.</div>
       </div>
-
+ 
+      <div class="upload-wrap">
+        <div class="upload-area" id="uploadArea" onclick="document.getElementById('screenshotInput').click()">
+          <input type="file" id="screenshotInput" accept="image/*" style="display:none" onchange="handleFileSelect(event)" />
+          <div class="upload-icon">&#8679;</div>
+          <div class="upload-text">Tap to upload payment screenshot</div>
+        </div>
+        <div class="upload-preview" id="uploadPreview">
+          <img id="previewImg" src="" alt="Screenshot preview" />
+          <div class="upload-filename" id="fileName"></div>
+          <button class="upload-remove" onclick="removeFile()">Remove</button>
+        </div>
+        <div class="upload-error" id="uploadError"></div>
+      </div>
+ 
       <button class="submit-btn" onclick="handleSubmit()">Confirm my place</button>
       <div class="warning-text">
         Venue revealed 2 hours before assembly<br>
         via private channel · No transfers · No refunds
       </div>
     </div>
-
+ 
     <div class="success-screen" id="successScreen">
       <div class="seal" style="margin: 0 auto 32px;"><div class="eyecon"></div></div>
       <div class="success-msg">The Society acknowledges you.</div>
@@ -133,56 +159,105 @@
       <div class="venue-reveal">Venue · Disclosed at 22:00</div>
     </div>
   </div>
-
+ 
   <div class="footer">
     <div class="footer-seal">The Midnight Society · Private · Non-transferable · By invitation only</div>
   </div>
 </div>
-
+ 
 <script>
   const RATE = 699;
   const UPI_ID = '9820007421@hdfc';
   const UPI_NAME = 'TheMidnightSociety';
   let groupSize = 1;
   let qrObj = null;
-
+  let screenshotBase64 = null;
+  let screenshotMime = null;
+  let screenshotFileName = null;
+ 
+  function handleFileSelect(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const errorEl = document.getElementById('uploadError');
+    errorEl.style.display = 'none';
+    if (!file.type.startsWith('image/')) {
+      errorEl.textContent = 'Please select an image file (JPG, PNG, etc.)';
+      errorEl.style.display = 'block';
+      event.target.value = '';
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      errorEl.textContent = 'File too large. Maximum size is 5 MB.';
+      errorEl.style.display = 'block';
+      event.target.value = '';
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      const dataUrl = e.target.result;
+      const parts = dataUrl.split(',');
+      screenshotBase64 = parts[1];
+      screenshotMime = parts[0].split(':')[1].split(';')[0];
+      screenshotFileName = file.name;
+      document.getElementById('previewImg').src = dataUrl;
+      document.getElementById('fileName').textContent = file.name;
+      document.getElementById('uploadArea').style.display = 'none';
+      document.getElementById('uploadPreview').style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+  }
+ 
+  function removeFile() {
+    screenshotBase64 = null;
+    screenshotMime = null;
+    screenshotFileName = null;
+    document.getElementById('screenshotInput').value = '';
+    document.getElementById('uploadArea').style.display = '';
+    document.getElementById('uploadPreview').style.display = 'none';
+    document.getElementById('uploadError').style.display = 'none';
+  }
+ 
   function buildUPILink(amount) {
     return 'upi://pay?pa=' + UPI_ID + '&pn=' + encodeURIComponent(UPI_NAME) + '&am=' + amount + '&cu=INR&tn=' + encodeURIComponent('Midnight Society Entry');
   }
-
+ 
   function updateUI() {
     const total = RATE * groupSize;
     document.getElementById('groupCount').textContent = groupSize;
     document.getElementById('totalAmount').textContent = '₹' + total.toLocaleString('en-IN');
     document.getElementById('perHead').textContent = '₹699 × ' + groupSize + (groupSize === 1 ? ' person' : ' people');
-
+ 
     const total2 = RATE * groupSize;
     const upiLink = 'upi://pay?pa=9820007421@hdfc&pn=NishqVikramNerlekar&am=' + total2 + '&cu=INR&tn=' + encodeURIComponent('Midnight Society Entry');
     document.getElementById('payLink').href = upiLink;
   }
-
+ 
   function changeGroup(delta) {
     groupSize = Math.max(1, groupSize + delta);
     updateUI();
   }
-
+ 
   async function handleSubmit() {
     const name = document.getElementById('nameInput').value.trim();
     const year = document.getElementById('yearInput').value;
     const ref = document.getElementById('refInput').value.trim();
     const phone = document.getElementById('phoneInput').value.trim();
-    if (!name || !year || !phone) { alert('Complete all fields before confirming.'); return; }
+    if (!name || !year || !phone) { alert('Complete all required fields before confirming.'); return; }
+    if (!screenshotBase64) { alert('Please upload your payment screenshot.'); return; }
     const total = RATE * groupSize;
     const btn = document.querySelector('.submit-btn');
-    btn.textContent = 'Sending...';
+    btn.textContent = 'Uploading...';
     btn.disabled = true;
     try {
-      await fetch('https://script.google.com/macros/s/AKfycbyOOt5BZAgHGmtSBrpN9NwkjHMm-CJkFBKwCbdhneEfTxxQ9LMR9YxeHP7NLIZwRIyB/exec', {
+      await fetch('https://script.google.com/macros/s/AKfycbynQ2BRFaouhIYVBCrjyFToSB2kz9cNHQjvVLM69092wLw2CvbkJqJ0WAOLxwEcFbzY/exec', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
         body: JSON.stringify({
           name, year, referred_by: ref || '—', phone,
-          group_size: groupSize, total_due: '₹' + total,
+          group_size: groupSize, total_due: total,
+          screenshot_data: screenshotBase64,
+          screenshot_mime: screenshotMime,
+          screenshot_name: screenshotFileName,
           _subject: 'New Registration — ' + name + ' (' + groupSize + ' person' + (groupSize > 1 ? 's' : '') + ')'
         })
       });
@@ -190,7 +265,7 @@
     document.getElementById('formArea').classList.add('hide');
     document.getElementById('successScreen').classList.add('show');
   }
-
+ 
   window.onload = function() { updateUI(); };
 </script>
 </body>
